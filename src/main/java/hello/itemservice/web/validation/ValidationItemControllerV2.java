@@ -10,6 +10,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
+import org.springframework.validation.ValidationUtils;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -24,7 +27,12 @@ import java.util.Map;
 public class ValidationItemControllerV2 {
 
     private final ItemRepository itemRepository;
+    private final ItemValidator itemValidator;
 
+    @InitBinder
+    public void init(WebDataBinder dataBinder) {
+        dataBinder.addValidators(itemValidator);
+    }
     @GetMapping
     public String items(Model model) {
         List<Item> items = itemRepository.findAll();
@@ -158,16 +166,26 @@ public class ValidationItemControllerV2 {
         return "redirect:/validation/v2/items/{itemId}";
     }
 
-    @PostMapping("/add")
+//    @PostMapping("/add")
     public String addItemV4(@ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
+
+
+        if (bindingResult.hasErrors()) {
+            log.info("errors = {}", bindingResult);
+            System.out.println("model = " + model);
+            return "/validation/v2/addForm";
+        }
+
 
         log.info("objectName = {}", bindingResult.getObjectName());
         log.info("target={}", bindingResult.getTarget());
 
-        if( !StringUtils.hasText(item.getItemName())){
-//            bindingResult.addError(new FieldError("item", "itemName", item.getItemName(), false, new String[]{"required.item.itemName"}, null,"상품 이름은 필수 입니다."));
-            bindingResult.rejectValue("itemName","required");
-        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(bindingResult, "itemName", "required");
+
+//        if( !StringUtils.hasText(item.getItemName())){
+////            bindingResult.addError(new FieldError("item", "itemName", item.getItemName(), false, new String[]{"required.item.itemName"}, null,"상품 이름은 필수 입니다."));
+//            bindingResult.rejectValue("itemName","required");
+//        }
         if (item.getPrice() == null || item.getPrice() < 1000 || item.getPrice() > 1000000) {
 //            bindingResult.addError(new FieldError("item", "price", item.getPrice(), false, new String[]{"range.item.price"} , new Object[]{1000,10000}, "가격은 1,000 ~ 1,000,000 까지 허용합니다."));
             bindingResult.rejectValue("price","range", new Object[]{1000,10000},null);
@@ -179,7 +197,7 @@ public class ValidationItemControllerV2 {
         if( item.getPrice() != null && item.getQuantity() != null  ){
             int resultPrice = item.getPrice() * item.getQuantity();
             if (resultPrice < 10000) {
-                bindingResult.addError(new ObjectError("item", new String[]{"totalPriceMin"},new Object[]{10000, resultPrice}, "가격 * 수량의 합은 10,000원 이상이어야 합니다. 현재 값 = " + resultPrice ));
+//                bindingResult.addError(new ObjectError("item", new String[]{"totalPriceMin"},new Object[]{10000, resultPrice}, "가격 * 수량의 합은 10,000원 이상이어야 합니다. 현재 값 = " + resultPrice ));
                 bindingResult.reject("totalPriceMin",new Object[]{10000, resultPrice}, null);
             }
         }
@@ -196,6 +214,47 @@ public class ValidationItemControllerV2 {
             redirectAttributes.addAttribute("status", true);
             return "redirect:/validation/v2/items/{itemId}";
         }
+
+//    @PostMapping("/add")
+    public String addItemV5(@ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
+
+        if(itemValidator.supports(item.getClass())){
+            itemValidator.validate(item, bindingResult);
+        }
+
+
+        if (bindingResult.hasErrors()) {
+            log.info("errors = {}", bindingResult);
+            System.out.println("model = " + model);
+            return "/validation/v2/addForm";
+        }
+
+
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v2/items/{itemId}";
+    }
+
+
+    @PostMapping("/add")
+    public String addItemV6(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
+
+        if (bindingResult.hasErrors()) {
+            log.info("errors = {}", bindingResult);
+            System.out.println("model = " + model);
+            return "/validation/v2/addForm";
+        }
+
+        // 성공 로직
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v2/items/{itemId}";
+    }
+
+
 
 
     @GetMapping("/{itemId}/edit")
